@@ -50,7 +50,7 @@ Tools like Valgrind and AddressSanitizer are precise, but they report leaks **wh
 - **Python ML:** windowed features, Decision Tree and Random Forest classifier, linear-fit growth forecast.
 - **Early-warning alarm:** fires only after 6 consecutive leak windows, which cuts false alarms.
 - **Size-class pool allocator** with aligned blocks and double-free detection.
-- **Terminal UI in C** (`mp_ui.c`): colored status banner, memory bar, sparkline, window table and alarm.
+- **Simple terminal report in C** (`mp_ui.c`): result (NORMAL / WATCHING / LEAK LIKELY), memory over time, growth rate and time until the memory limit.
 - **Web dashboard** (`dashboard.html`): animated chart of the same analysis, runs in any browser.
 
 ---
@@ -198,12 +198,12 @@ python3 analyze.py data/
 ```bash
 gcc -Wall -Wextra -O2 mp_ui.c -o mp_ui -lm
 
-./mp_ui data/run_leaky.csv                  # replay a sampler CSV
+./mp_ui data/run_leaky.csv                  # read a sampler CSV
 ./mp_ui --demo server --leak 8 --seed 42    # built-in demo, leaky server
 ./mp_ui --demo cache --leak 0               # clean cache
 ./mp_ui --demo bursty --leak 8 --limit 512  # bursty, 512 MB limit
 ```
-Options: `--limit MB`, `--speed ms`, `--no-anim`, `--no-color`.
+Options: `--limit MB`, `--live` (animate), `--speed ms`, `--no-color`. The output is plain ASCII, so it looks the same on every terminal.
 
 ### Web dashboard
 Open `dashboard.html` in any browser (no install). Pick a workload, set the leak rate and press **Run simulation**, or press **Load sampler CSV** to analyse your own log.
@@ -231,22 +231,33 @@ The **Actual Output** column for the C tests must be filled from your own run. P
 
 | # | Command | Expected | Actual output | Pass? |
 |---|---|---|---|---|
-| 7 | `./mp_ui --demo server --leak 8 --seed 42 --no-anim` | Alarm raised, growth forecast shown | `LEAK LIKELY`, alarm at 1.59 s, growth +117.9 KB/s, 35.7 min to 256 MB | Yes |
-| 8 | `./mp_ui --demo cache --leak 0 --no-anim` | No alarm (cache fills, then flattens) | `NORMAL`, no sustained growth | Yes |
-| 9 | `./mp_ui --demo bursty --leak 0 --no-anim` | No alarm despite bursts | `NORMAL`, no sustained growth | Yes |
-| 10 | `./mp_ui leaky.csv --no-anim` (synthetic steady growth) | Alarm raised | `LEAK LIKELY`, alarm at 1.44 s, +250.1 KB/s | Yes |
+| 7 | `./mp_ui --demo server --leak 8 --seed 42` | Alarm raised, growth forecast shown | `LEAK LIKELY`, alarm at 1.59 s, growing 117.9 KB per second, 35.7 minutes to 256 MB | Yes |
+| 8 | `./mp_ui --demo cache --leak 0` | No alarm (cache fills, then flattens) | `NORMAL`, memory is steady | Yes |
+| 9 | `./mp_ui --demo bursty --leak 0` | No alarm despite bursts | `NORMAL`, memory is steady | Yes |
+| 10 | `./mp_ui leaky.csv` (synthetic steady growth) | Alarm raised | `LEAK LIKELY`, alarm at 1.44 s, growing 250.1 KB per second | Yes |
 
 Sample screen from test 7:
 
 ```text
-  MemPredict-C  AI-guided memory leak early warning
-  ----------------------------------------------------------------------
-   !! LEAK LIKELY !!   alarm at 1.59 s, 6 consecutive leak windows
-
-  Time          4.99 s   (500 samples)
-  Live bytes  ████████████████████████████████████████ 3.60 MB
-  Growth      +117.9 KB/s (floor trend)
-  Time to 256 MB  35.7 min at this rate
+=============================================
+  MemPredict-C : Memory Leak Check
+=============================================
+  Result : LEAK LIKELY
+  Why    : memory kept growing in 6 checks in a row
+  Alarm  : raised at 1.59 s (32% of the run)
+---------------------------------------------
+  Memory over time
+   0.0 s |#                             | 151.2 KB
+   1.0 s |##########################    | 3.13 MB
+   2.0 s |###########################   | 3.24 MB
+   3.0 s |############################  | 3.36 MB
+   4.0 s |############################# | 3.49 MB
+   5.0 s |##############################| 3.60 MB
+---------------------------------------------
+  Memory now : 3.60 MB
+  Growing by : 117.9 KB every second
+  Will reach 256 MB in about 35.7 minutes
+=============================================
 ```
 
 ### Measured results from our experiments
